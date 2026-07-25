@@ -1,0 +1,232 @@
+{
+  "name": "Mealie Einkaufsliste (iOS Freitext)",
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "mealie-einkaufsliste",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1000000-0000-4000-8000-000000000001",
+      "name": "Webhook (iOS)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-720, 300],
+      "webhookId": "b7f1c2d3-4e5a-4b6c-9d8e-0f1a2b3c4d5e"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cfg-1",
+              "name": "mealieUrl",
+              "value": "https://mealie.example.com",
+              "type": "string"
+            },
+            {
+              "id": "cfg-2",
+              "name": "shoppingListName",
+              "value": "Einkaufsliste",
+              "type": "string"
+            },
+            {
+              "id": "cfg-3",
+              "name": "text",
+              "value": "={{ typeof $json.body === 'string' ? $json.body : ($json.body.text || $json.body.Text || $json.body.input || '') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "a1000000-0000-4000-8000-000000000002",
+      "name": "Konfiguration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-500, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.mealieUrl }}/api/groups/labels?perPage=-1&orderBy=name",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "a1000000-0000-4000-8000-000000000003",
+      "name": "Kategorien holen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-280, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Konfiguration').first().json.mealieUrl }}/api/households/shopping/lists?perPage=-1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "a1000000-0000-4000-8000-000000000004",
+      "name": "Einkaufslisten holen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-60, 300]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Du erstellst aus einem Freitext eine strukturierte Einkaufsliste.\n\n## Erlaubte Kategorien\n{{ $('Kategorien holen').first().json.items.map(l => '- ' + l.name).join('\\n') }}\n\n## Eingabetext\n{{ $('Konfiguration').first().json.text }}\n\n## Regeln\n1. Zerlege den Text in einzelne Einkaufsartikel – ein Artikel pro Eintrag.\n2. Erkenne Menge und Einheit, falls vorhanden. Ohne Menge: quantity = 1. Ohne Einheit: unit = \"\".\n3. \"name\" ist der reine Artikelname auf Deutsch, ohne Menge und Einheit.\n4. Ordne jedem Artikel GENAU EINE Kategorie aus der Liste oben zu und schreibe den Kategorienamen exakt so, wie er oben steht.\n5. Erfinde NIEMALS neue Kategorien. Passt keine, setze category = \"\".\n6. Fasse Mehrfachnennungen desselben Artikels zusammen und addiere die Mengen.\n7. Ignoriere Füllwörter wie \"ich brauche\", \"kauf bitte\", \"noch\", \"und\".\n8. Antworte ausschließlich mit dem geforderten JSON.",
+        "hasOutputParser": true
+      },
+      "id": "a1000000-0000-4000-8000-000000000005",
+      "name": "Items & Kategorien per KI",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [180, 300]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "a1000000-0000-4000-8000-000000000006",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [120, 520]
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"items\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"name\": { \"type\": \"string\" },\n          \"quantity\": { \"type\": \"number\" },\n          \"unit\": { \"type\": \"string\" },\n          \"category\": { \"type\": \"string\" }\n        },\n        \"required\": [\"name\", \"quantity\", \"unit\", \"category\"]\n      }\n    }\n  },\n  \"required\": [\"items\"]\n}"
+      },
+      "id": "a1000000-0000-4000-8000-000000000007",
+      "name": "Struktur-Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [300, 520]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Konfiguration').first().json;\nconst labels = $('Kategorien holen').first().json.items || [];\nconst lists = $('Einkaufslisten holen').first().json.items || [];\n\nconst norm = (s) => (s ?? '').toString().trim().toLowerCase();\n\n// Zielliste bestimmen: Name aus der Konfiguration, sonst die erste Liste\nconst wanted = norm(cfg.shoppingListName);\nconst list = lists.find((l) => norm(l.name) === wanted) || lists[0];\nif (!list) {\n  throw new Error('Keine Einkaufsliste in Mealie gefunden.');\n}\n\n// Kategorien nur zuordnen, niemals neu anlegen\nconst labelByName = new Map(labels.map((l) => [norm(l.name), l]));\n\nconst ai = $input.first().json;\nconst extracted = Array.isArray(ai.items)\n  ? ai.items\n  : (ai.output && Array.isArray(ai.output.items) ? ai.output.items : []);\n\nconst unmatched = [];\n\nconst payload = extracted\n  .map((it, i) => {\n    const label = labelByName.get(norm(it.category)) || null;\n    if (norm(it.category) && !label) unmatched.push(it.category);\n\n    const note = [(it.unit ?? '').toString().trim(), (it.name ?? '').toString().trim()]\n      .filter(Boolean)\n      .join(' ');\n\n    const qty = Number(it.quantity);\n\n    return {\n      shoppingListId: list.id,\n      note,\n      quantity: Number.isFinite(qty) && qty > 0 ? qty : 1,\n      isFood: false,\n      labelId: label ? label.id : null,\n      checked: false,\n      position: i,\n    };\n  })\n  .filter((x) => x.note);\n\nreturn [\n  {\n    json: {\n      shoppingList: { id: list.id, name: list.name },\n      payload,\n      stats: {\n        count: payload.length,\n        categorized: payload.filter((p) => p.labelId).length,\n        unmatchedCategories: [...new Set(unmatched)],\n      },\n    },\n  },\n];"
+      },
+      "id": "a1000000-0000-4000-8000-000000000008",
+      "name": "Mealie-Payload bauen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [540, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Konfiguration').first().json.mealieUrl }}/api/households/shopping/items/create-bulk",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.payload) }}",
+        "options": {}
+      },
+      "id": "a1000000-0000-4000-8000-000000000009",
+      "name": "Items an Mealie senden",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [760, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, list: $('Mealie-Payload bauen').first().json.shoppingList.name, added: $('Mealie-Payload bauen').first().json.stats.count, categorized: $('Mealie-Payload bauen').first().json.stats.categorized, unmatchedCategories: $('Mealie-Payload bauen').first().json.stats.unmatchedCategories, items: $('Mealie-Payload bauen').first().json.payload.map(p => p.note) }) }}",
+        "options": {}
+      },
+      "id": "a1000000-0000-4000-8000-000000000010",
+      "name": "Antwort an iOS",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [980, 300]
+    },
+    {
+      "parameters": {
+        "width": 460,
+        "height": 300,
+        "content": "## 1) Vor dem ersten Lauf einrichten\n\n**Credentials (alle rot markierten Nodes):**\n- `Header Auth` für Mealie: Name `Authorization`, Value `Bearer <DEIN_MEALIE_API_TOKEN>`\n  (Mealie → Profil → API Tokens)\n- `Header Auth` für den Webhook: eigener Name/Value, z. B. `X-Api-Key` / `<geheim>`\n- OpenAI-Credential am Chat-Model-Node\n\n**Node „Konfiguration“ anpassen:**\n- `mealieUrl` → deine Mealie-URL (ohne Slash am Ende)\n- `shoppingListName` → Name deiner Liste in Mealie"
+      },
+      "id": "a1000000-0000-4000-8000-000000000011",
+      "name": "Setup",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-1240, 140]
+    },
+    {
+      "parameters": {
+        "width": 420,
+        "height": 260,
+        "content": "## 2) Aufruf aus iOS Shortcuts\n\n`Inhalte von URL abrufen`:\n- URL: `https://n8n.../webhook/mealie-einkaufsliste`\n- Methode: **POST**\n- Header: dein Webhook-Auth-Header\n- Body: **JSON** → `text` = diktierter Text\n\nBeispiel-Eingabe:\n> „2 Liter Milch, Brot, ein Kilo Äpfel und noch Spülmittel“"
+      },
+      "id": "a1000000-0000-4000-8000-000000000012",
+      "name": "iOS",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-1240, 470]
+    },
+    {
+      "parameters": {
+        "width": 440,
+        "height": 220,
+        "content": "## Mealie-API-Version\n\nDiese Pfade gelten für **Mealie v2+**:\n- `GET /api/groups/labels`\n- `GET /api/households/shopping/lists`\n- `POST /api/households/shopping/items/create-bulk`\n\nBei **Mealie v1** heißt es statt `households` jeweils `groups`\n(z. B. `/api/groups/shopping/items/create-bulk`)."
+      },
+      "id": "a1000000-0000-4000-8000-000000000013",
+      "name": "API-Hinweis",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-60, 20]
+    },
+    {
+      "parameters": {
+        "width": 400,
+        "height": 200,
+        "content": "## Kategorien\n\nDie KI bekommt ausschließlich die **vorhandenen** Mealie-Labels\nund darf keine neuen erfinden. Findet sie keine passende,\nbleibt `labelId` leer – das Item landet unkategorisiert\nin der Liste und wird in der Antwort unter\n`unmatchedCategories` gemeldet."
+      },
+      "id": "a1000000-0000-4000-8000-000000000014",
+      "name": "Kategorie-Logik",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [540, 20]
+    }
+  ],
+  "connections": {
+    "Webhook (iOS)": {
+      "main": [[{ "node": "Konfiguration", "type": "main", "index": 0 }]]
+    },
+    "Konfiguration": {
+      "main": [[{ "node": "Kategorien holen", "type": "main", "index": 0 }]]
+    },
+    "Kategorien holen": {
+      "main": [[{ "node": "Einkaufslisten holen", "type": "main", "index": 0 }]]
+    },
+    "Einkaufslisten holen": {
+      "main": [[{ "node": "Items & Kategorien per KI", "type": "main", "index": 0 }]]
+    },
+    "Items & Kategorien per KI": {
+      "main": [[{ "node": "Mealie-Payload bauen", "type": "main", "index": 0 }]]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [[{ "node": "Items & Kategorien per KI", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Struktur-Parser": {
+      "ai_outputParser": [[{ "node": "Items & Kategorien per KI", "type": "ai_outputParser", "index": 0 }]]
+    },
+    "Mealie-Payload bauen": {
+      "main": [[{ "node": "Items an Mealie senden", "type": "main", "index": 0 }]]
+    },
+    "Items an Mealie senden": {
+      "main": [[{ "node": "Antwort an iOS", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {}
+}
