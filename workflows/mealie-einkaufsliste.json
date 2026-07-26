@@ -99,16 +99,17 @@
       }
     },
     {
-      "id": "f4948c69-81e0-4549-a802-448b343248c2",
-      "name": "OpenAI Chat Model",
-      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
-      "typeVersion": 1.3,
+      "id": "7b31b12f-d3c7-485a-a2f8-c5bdb93c6ddf",
+      "name": "Anthropic Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.5,
       "position": [-60, 540],
       "parameters": {
         "model": {
           "__rl": true,
+          "cachedResultName": "Claude Sonnet 4.6",
           "mode": "list",
-          "value": "gpt-5.4-mini"
+          "value": "claude-sonnet-4-6"
         },
         "options": {
           "temperature": 0
@@ -165,7 +166,7 @@
       "typeVersion": 1,
       "position": [-930, 250],
       "parameters": {
-        "content": "## Vor dem ersten Lauf\n\n**Credentials setzen:**\n- *Mealie API Token* (Bearer Auth) – Mealie → Profil → API Tokens\n- *Webhook Auth (iOS Shortcut)* (Header Auth) – frei wählbarer Header, z. B. X-Api-Key\n- *OpenAI*\n\n**Konfiguration anpassen:** mealieUrl und shoppingListName.\n\nFindet sich keine Liste mit dem Namen, wird die erste genommen.",
+        "content": "## Vor dem ersten Lauf\n\n**Credentials setzen:**\n- *Mealie API Token* (Bearer Auth) – Mealie → Profil → API Tokens\n- *Webhook Auth (iOS Shortcut)* (Header Auth) – frei wählbarer Header, z. B. X-Api-Key\n- *Anthropic API* – am Anthropic Chat Model\n\n**Konfiguration anpassen:** mealieUrl und shoppingListName.\n\nFindet sich keine Liste mit dem Namen, wird die erste genommen.",
         "color": 4,
         "width": 520,
         "height": 200
@@ -214,7 +215,7 @@
     "Artikel & Kategorien erkennen": {
       "main": [[{ "node": "Mealie-Payload bauen", "type": "main", "index": 0 }]]
     },
-    "OpenAI Chat Model": {
+    "Anthropic Chat Model": {
       "ai_languageModel": [[{ "node": "Artikel & Kategorien erkennen", "type": "ai_languageModel", "index": 0 }]]
     },
     "Mealie-Payload bauen": {

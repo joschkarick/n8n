@@ -36,10 +36,11 @@ macht als zwei getrennte Aufrufe — und kostet nur einen Request.
    nicht Header Auth.
 3. **Header Auth**-Credential für den Webhook (z. B. `X-Api-Key` / ein selbst
    gewähltes Geheimnis) am Node `Einkaufszettel empfangen` auswählen.
-4. OpenAI-Credential am `OpenAI Chat Model` auswählen (oder den Node durch
-   einen beliebigen anderen Chat-Model-Node ersetzen — Anthropic, Ollama, …).
-   Das Modell steht auf `gpt-5.4-mini`; falls das in deinem Account nicht
-   existiert, im Dropdown ein vorhandenes wählen.
+4. **Anthropic-Credential** am `Anthropic Chat Model` auswählen. Das Modell steht
+   auf `claude-sonnet-4-6`; falls das in deinem Account nicht verfügbar ist, im
+   Dropdown ein vorhandenes wählen. Der Node ist gegen jedes andere
+   Chat-Model-Node austauschbar (OpenAI, Ollama, …) — der Information Extractor
+   erwartet nur *irgendein* Sprachmodell am `ai_languageModel`-Eingang.
 5. Im Node `Konfiguration` setzen:
    - `mealieUrl` → z. B. `https://mealie.joschka.eu` (ohne Slash am Ende)
    - `shoppingListName` → exakter Name der Liste in Mealie
