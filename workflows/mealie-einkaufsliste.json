@@ -46,7 +46,7 @@
             {
               "id": "raw-text",
               "name": "text",
-              "value": "={{ $json.body?.text ?? $json.text ?? \"\" }}",
+              "value": "={{ typeof $json.body === 'string' ? $json.body : ($json.body?.text ?? $json.body?.Text ?? $json.body?.input ?? $json.text ?? '') }}",
               "type": "string"
             }
           ]
@@ -84,35 +84,32 @@
       "executeOnce": true
     },
     {
+      "id": "1c0d4b8e-2f31-4a77-9a2c-6e5b0d9f3a41",
+      "name": "Bekannte Lebensmittel holen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [0, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Konfiguration').item.json.mealieUrl }}/api/foods?perPage=-1&orderBy=name",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "options": {}
+      },
+      "executeOnce": true
+    },
+    {
       "id": "ae750c69-5b14-4488-83aa-87e5077b0539",
       "name": "Artikel & Kategorien erkennen",
       "type": "@n8n/n8n-nodes-langchain.informationExtractor",
       "typeVersion": 1.2,
-      "position": [0, 300],
+      "position": [220, 300],
       "parameters": {
         "text": "={{ $('Konfiguration').item.json.text }}",
         "schemaType": "manual",
-        "inputSchema": "{\"type\":\"object\",\"properties\":{\"items\":{\"type\":\"array\",\"description\":\"Alle erkannten Einkaufsartikel\",\"items\":{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\",\"description\":\"Reiner Artikelname auf Deutsch, ohne Menge und Einheit\"},\"quantity\":{\"type\":\"number\",\"description\":\"Menge als Zahl, ohne Angabe 1\"},\"unit\":{\"type\":\"string\",\"description\":\"Einheit, ohne Angabe ein leerer String\"},\"category\":{\"type\":\"string\",\"description\":\"Exakt einer der erlaubten Kategorienamen, sonst ein leerer String\"}},\"required\":[\"name\",\"quantity\",\"unit\",\"category\"]}}},\"required\":[\"items\"]}",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"items\":{\"type\":\"array\",\"description\":\"Alle erkannten Einkaufsartikel\",\"items\":{\"type\":\"object\",\"properties\":{\"originalName\":{\"type\":\"string\",\"description\":\"Artikelname genau so, wie er im Eingabetext steht, ohne Menge und Einheit\"},\"name\":{\"type\":\"string\",\"description\":\"Bekannte Schreibweise aus der Lebensmittelliste, wenn eindeutig zuzuordnen, sonst identisch mit originalName\"},\"quantity\":{\"type\":\"number\",\"description\":\"Menge als Zahl, ohne Angabe 1\"},\"unit\":{\"type\":\"string\",\"description\":\"Einheit, ohne Angabe ein leerer String\"},\"category\":{\"type\":\"string\",\"description\":\"Exakt einer der erlaubten Kategorienamen, sonst ein leerer String\"}},\"required\":[\"originalName\",\"name\",\"quantity\",\"unit\",\"category\"]}}},\"required\":[\"items\"]}",
         "options": {
-          "systemPromptTemplate": "=Du bist ein Extraktions-Assistent für Einkaufslisten. Zerlege den Eingabetext in einzelne Einkaufsartikel.\n\nErlaubte Kategorien – ausschliesslich diese, niemals neue erfinden:\n{{ $('Mealie-Kategorien holen').item.json.items.map(l => '- ' + l.name).join('\\n') }}\n\nRegeln:\n1. Ein Eintrag pro Artikel.\n2. quantity ist die erkannte Menge als Zahl, ohne Angabe 1.\n3. unit ist die erkannte Einheit, ohne Angabe ein leerer String.\n4. name ist der reine Artikelname auf Deutsch, ohne Menge und Einheit.\n5. category ist exakt einer der oben genannten Namen. Passt keiner, ein leerer String.\n6. Mehrfachnennungen desselben Artikels zusammenfassen und die Mengen addieren.\n7. Füllwörter wie ich brauche, kauf bitte oder noch ignorieren."
-        }
-      }
-    },
-    {
-      "id": "7b31b12f-d3c7-485a-a2f8-c5bdb93c6ddf",
-      "name": "Anthropic Chat Model",
-      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
-      "typeVersion": 1.5,
-      "position": [-60, 540],
-      "parameters": {
-        "model": {
-          "__rl": true,
-          "cachedResultName": "Claude Sonnet 4.6",
-          "mode": "list",
-          "value": "claude-sonnet-4-6"
-        },
-        "options": {
-          "temperature": 0
+          "systemPromptTemplate": "=Du bist ein Extraktions-Assistent für Einkaufslisten. Zerlege den Eingabetext in einzelne Einkaufsartikel.\n\nErlaubte Kategorien – ausschliesslich diese, niemals neue erfinden:\n{{ $('Mealie-Kategorien holen').item.json.items.map(l => '- ' + l.name).join('\\n') }}\n\nBekannte Lebensmittel in Mealie:\n{{ $('Bekannte Lebensmittel holen').item.json.items.map(f => '- ' + f.name).join('\\n') }}\n\nRegeln:\n1. Ein Eintrag pro Artikel.\n2. originalName ist der Artikelname genau so, wie er im Eingabetext steht, ohne Menge und Einheit.\n3. name ist normalerweise identisch mit originalName. Entspricht originalName aber eindeutig einem der bekannten Lebensmittel oben – etwa bei Tippfehlern, Diktierfehlern oder abweichender Schreibweise – dann setze name auf genau die dort aufgeführte Schreibweise.\n4. Im Zweifel nicht korrigieren. Bist du dir nicht sicher, ob dasselbe Lebensmittel gemeint ist, setze name identisch zu originalName. Eine ungewohnte Schreibweise stehen zu lassen ist deutlich besser, als den falschen Artikel einzutragen.\n5. Niemals auf ein bekanntes Lebensmittel korrigieren, das etwas anderes bezeichnet. Zwiebel und Frühlingszwiebel sind verschiedene Artikel, ebenso Milch und Buttermilch oder Mehl und Vollkornmehl.\n6. Steht der Artikel nicht in der Liste der bekannten Lebensmittel, ist das völlig in Ordnung. Dann bleibt name einfach gleich originalName.\n7. quantity ist die erkannte Menge als Zahl, ohne Angabe 1.\n8. unit ist die erkannte Einheit, ohne Angabe ein leerer String.\n9. category ist exakt einer der oben genannten Kategorienamen. Passt keiner, ein leerer String.\n10. Mehrfachnennungen desselben Artikels zusammenfassen und die Mengen addieren.\n11. Füllwörter wie ich brauche, kauf bitte oder noch ignorieren."
         }
       }
     },
@@ -121,11 +118,11 @@
       "name": "Mealie-Payload bauen",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [220, 300],
+      "position": [440, 300],
       "parameters": {
         "mode": "runOnceForAllItems",
         "language": "javaScript",
-        "jsCode": "const cfg = $('Konfiguration').first().json;\nconst labels = $('Mealie-Kategorien holen').first().json.items || [];\nconst lists = $('Einkaufslisten holen').first().json.items || [];\n\nconst norm = (s) => (s ?? '').toString().trim().toLowerCase();\n\nconst wanted = norm(cfg.shoppingListName);\nconst list = lists.find((l) => norm(l.name) === wanted) || lists[0];\nif (!list) {\n  throw new Error('Keine Einkaufsliste in Mealie gefunden.');\n}\n\nconst labelByName = new Map(labels.map((l) => [norm(l.name), l]));\n\nconst ai = $input.first().json;\nconst extracted = Array.isArray(ai.items)\n  ? ai.items\n  : (ai.output && Array.isArray(ai.output.items) ? ai.output.items : []);\n\nconst unmatched = [];\n\nconst payload = extracted\n  .map((it, i) => {\n    const label = labelByName.get(norm(it.category)) || null;\n    if (norm(it.category) && !label) unmatched.push(it.category);\n\n    const note = [(it.unit ?? '').toString().trim(), (it.name ?? '').toString().trim()]\n      .filter(Boolean)\n      .join(' ');\n\n    const qty = Number(it.quantity);\n\n    return {\n      shoppingListId: list.id,\n      note,\n      quantity: Number.isFinite(qty) && qty > 0 ? qty : 1,\n      isFood: false,\n      labelId: label ? label.id : null,\n      checked: false,\n      position: i,\n    };\n  })\n  .filter((x) => x.note);\n\nreturn [\n  {\n    json: {\n      shoppingList: { id: list.id, name: list.name },\n      payload,\n      stats: {\n        count: payload.length,\n        categorized: payload.filter((p) => p.labelId).length,\n        unmatchedCategories: [...new Set(unmatched)],\n      },\n    },\n  },\n];"
+        "jsCode": "const cfg = $('Konfiguration').first().json;\nconst labels = $('Mealie-Kategorien holen').first().json.items || [];\nconst lists = $('Einkaufslisten holen').first().json.items || [];\nconst foods = $('Bekannte Lebensmittel holen').first().json.items || [];\n\nconst norm = (s) => (s ?? '').toString().trim().toLowerCase();\n\nconst wanted = norm(cfg.shoppingListName);\nconst list = lists.find((l) => norm(l.name) === wanted) || lists[0];\nif (!list) {\n  throw new Error('Keine Einkaufsliste in Mealie gefunden.');\n}\n\nconst labelByName = new Map(labels.map((l) => [norm(l.name), l]));\n\n// Erlaubte Zielschreibweisen: Name, Pluralform und Aliase der bekannten Lebensmittel\nconst knownFoodNames = new Set();\nfor (const f of foods) {\n  if (f.name) knownFoodNames.add(norm(f.name));\n  if (f.pluralName) knownFoodNames.add(norm(f.pluralName));\n  for (const a of f.aliases || []) {\n    if (a && a.name) knownFoodNames.add(norm(a.name));\n  }\n}\n\nconst ai = $input.first().json;\nconst extracted = Array.isArray(ai.items)\n  ? ai.items\n  : (ai.output && Array.isArray(ai.output.items) ? ai.output.items : []);\n\nconst unmatchedCategories = [];\nconst corrections = [];\nconst rejectedCorrections = [];\n\nconst payload = extracted\n  .map((it, i) => {\n    const original = (it.originalName ?? it.name ?? '').toString().trim();\n    let name = ((it.name ?? '').toString().trim()) || original;\n\n    // Eine Namenskorrektur wird nur übernommen, wenn das Ziel wirklich in Mealie existiert.\n    if (norm(name) !== norm(original)) {\n      if (knownFoodNames.has(norm(name))) {\n        corrections.push({ from: original, to: name });\n      } else {\n        rejectedCorrections.push({ from: original, to: name });\n        name = original;\n      }\n    }\n\n    const label = labelByName.get(norm(it.category)) || null;\n    if (norm(it.category) && !label) unmatchedCategories.push(it.category);\n\n    const note = [(it.unit ?? '').toString().trim(), name].filter(Boolean).join(' ');\n\n    const qty = Number(it.quantity);\n\n    return {\n      shoppingListId: list.id,\n      note,\n      quantity: Number.isFinite(qty) && qty > 0 ? qty : 1,\n      isFood: false,\n      labelId: label ? label.id : null,\n      checked: false,\n      position: i,\n    };\n  })\n  .filter((x) => x.note);\n\nreturn [\n  {\n    json: {\n      shoppingList: { id: list.id, name: list.name },\n      payload,\n      stats: {\n        count: payload.length,\n        categorized: payload.filter((p) => p.labelId).length,\n        unmatchedCategories: [...new Set(unmatchedCategories)],\n        knownFoods: knownFoodNames.size,\n        corrections,\n        rejectedCorrections,\n      },\n    },\n  },\n];"
       }
     },
     {
@@ -133,7 +130,7 @@
       "name": "Items an Mealie senden",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
-      "position": [440, 300],
+      "position": [660, 300],
       "parameters": {
         "method": "POST",
         "url": "={{ $('Konfiguration').item.json.mealieUrl }}/api/households/shopping/items/create-bulk",
@@ -151,13 +148,31 @@
       "name": "Antwort an iOS",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
-      "position": [660, 300],
+      "position": [880, 300],
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ ok: true, list: $('Mealie-Payload bauen').first().json.shoppingList.name, added: $('Mealie-Payload bauen').first().json.stats.count, categorized: $('Mealie-Payload bauen').first().json.stats.categorized, unmatchedCategories: $('Mealie-Payload bauen').first().json.stats.unmatchedCategories, items: $('Mealie-Payload bauen').first().json.payload.map(p => p.note) }) }}",
+        "responseBody": "={{ JSON.stringify({ ok: true, list: $('Mealie-Payload bauen').first().json.shoppingList.name, added: $('Mealie-Payload bauen').first().json.stats.count, categorized: $('Mealie-Payload bauen').first().json.stats.categorized, unmatchedCategories: $('Mealie-Payload bauen').first().json.stats.unmatchedCategories, corrections: $('Mealie-Payload bauen').first().json.stats.corrections, items: $('Mealie-Payload bauen').first().json.payload.map(p => p.note) }) }}",
         "options": {}
       },
       "executeOnce": true
+    },
+    {
+      "id": "7b31b12f-d3c7-485a-a2f8-c5bdb93c6ddf",
+      "name": "Anthropic Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.5,
+      "position": [160, 540],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "cachedResultName": "Claude Sonnet 4.6",
+          "mode": "list",
+          "value": "claude-sonnet-4-6"
+        },
+        "options": {
+          "temperature": 0
+        }
+      }
     },
     {
       "id": "45b5a585-ddbb-4a1e-8c98-bd4ca67b190e",
@@ -179,9 +194,9 @@
       "typeVersion": 1,
       "position": [-490, 250],
       "parameters": {
-        "content": "## Mealie-API\n\nPfade gelten für **Mealie v2+**:\n- GET /api/groups/labels\n- GET /api/households/shopping/lists\n- POST /api/households/shopping/items/create-bulk\n\nUnter **v1** heisst der Namespace groups statt households.",
+        "content": "## Mealie-API\n\nPfade gelten für **Mealie v2+**:\n- GET /api/groups/labels\n- GET /api/households/shopping/lists\n- GET /api/foods\n- POST /api/households/shopping/items/create-bulk\n\nUnter **v1** heisst der Namespace groups statt households.",
         "color": 5,
-        "width": 520,
+        "width": 660,
         "height": 200
       }
     },
@@ -190,12 +205,12 @@
       "name": "Sticky Note 8ff8e366",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-50, 250],
+      "position": [180, 250],
       "parameters": {
-        "content": "## Keine neuen Kategorien\n\nDie KI bekommt ausschliesslich die vorhandenen Mealie-Labels in den System-Prompt und darf keine neuen erfinden.\n\nDer Code-Node matcht das Ergebnis zusätzlich gegen echte Label-IDs. Ein halluzinierter Kategoriename führt deshalb nur zu labelId null – das Item landet unkategorisiert in der Liste und taucht in der Antwort unter unmatchedCategories auf.",
+        "content": "## Nichts erfinden, nur zuordnen\n\n**Kategorien:** Die KI bekommt ausschliesslich die vorhandenen Mealie-Labels und darf keine neuen erfinden. Der Code-Node matcht gegen echte Label-IDs – ein halluzinierter Name führt nur zu labelId null.\n\n**Artikelnamen:** Die KI darf Tipp- und Diktierfehler auf bekannte Lebensmittel korrigieren, aber nur bei Eindeutigkeit. Der Code-Node übernimmt eine Korrektur nur, wenn der Zielname wirklich in /api/foods existiert (Name, Plural oder Alias) – sonst bleibt der Originalname stehen.\n\nBeides landet in der Antwort unter unmatchedCategories bzw. corrections.",
         "color": 3,
-        "width": 520,
-        "height": 200
+        "width": 560,
+        "height": 260
       }
     }
   ],
@@ -210,6 +225,9 @@
       "main": [[{ "node": "Einkaufslisten holen", "type": "main", "index": 0 }]]
     },
     "Einkaufslisten holen": {
+      "main": [[{ "node": "Bekannte Lebensmittel holen", "type": "main", "index": 0 }]]
+    },
+    "Bekannte Lebensmittel holen": {
       "main": [[{ "node": "Artikel & Kategorien erkennen", "type": "main", "index": 0 }]]
     },
     "Artikel & Kategorien erkennen": {

@@ -17,10 +17,11 @@ Stands und lässt sich über *Workflows → … → Import from File* einspielen
 | 2 | `Konfiguration` | Mealie-URL, Ziel-Listenname, Text normalisieren |
 | 3 | `Mealie-Kategorien holen` | `GET /api/groups/labels?perPage=-1` |
 | 4 | `Einkaufslisten holen` | `GET /api/households/shopping/lists?perPage=-1` |
-| 5 | `Artikel & Kategorien erkennen` | Information Extractor: Extraktion **und** Kategoriezuordnung in einem LLM-Call, begrenzt auf die vorhandenen Labels |
-| 6 | `Mealie-Payload bauen` | Label-Namen → Label-IDs, Ziel-Liste auflösen, Payload bauen |
-| 7 | `Items an Mealie senden` | `POST /api/households/shopping/items/create-bulk` |
-| 8 | `Antwort an iOS` | JSON-Zusammenfassung zurück an den Shortcut |
+| 5 | `Bekannte Lebensmittel holen` | `GET /api/foods?perPage=-1` — Vokabular für die Namenskorrektur |
+| 6 | `Artikel & Kategorien erkennen` | Information Extractor: Extraktion, Kategoriezuordnung **und** Namensabgleich in einem LLM-Call |
+| 7 | `Mealie-Payload bauen` | Label-Namen → Label-IDs, Namenskorrekturen prüfen, Ziel-Liste auflösen, Payload bauen |
+| 8 | `Items an Mealie senden` | `POST /api/households/shopping/items/create-bulk` |
+| 9 | `Antwort an iOS` | JSON-Zusammenfassung zurück an den Shortcut |
 
 Schritt 2 und 4 der ursprünglichen Anforderung (Items auslesen / Kategorien
 zuordnen) sind bewusst **ein** LLM-Call: das Modell sieht den Text und die
@@ -74,6 +75,7 @@ Antwort:
   "added": 4,
   "categorized": 3,
   "unmatchedCategories": [],
+  "corrections": [{ "from": "Milhc", "to": "Milch" }],
   "items": ["Liter Milch", "Brot", "Kilo Äpfel", "Spülmittel"]
 }
 ```
@@ -86,6 +88,36 @@ bleibt `labelId` leer — das Item landet unkategorisiert in der Liste und der
 Kategoriename taucht in der Antwort unter `unmatchedCategories` auf. Der
 `Code`-Node matcht zusätzlich nur gegen real existierende Label-IDs, ein
 halluzinierter Kategoriename kann also nichts kaputt machen.
+
+## Namensabgleich
+
+Tipp- und Diktierfehler werden gegen die in Mealie hinterlegten Lebensmittel
+(`GET /api/foods`) korrigiert — „Milhc" wird zu „Milch". Das läuft in zwei
+Stufen:
+
+1. **Die KI** bekommt die Namen der bekannten Lebensmittel und darf einen
+   erkannten Artikel darauf abbilden, aber nur bei Eindeutigkeit. Die Regeln im
+   System-Prompt sagen ausdrücklich, im Zweifel nicht zu korrigieren, und nennen
+   Gegenbeispiele (Zwiebel ≠ Frühlingszwiebel, Milch ≠ Buttermilch).
+2. **Der `Code`-Node** übernimmt eine Korrektur nur, wenn der Zielname wirklich
+   in Mealie existiert — geprüft gegen `name`, `pluralName` und `aliases`.
+   Andernfalls wird der Originalname wiederhergestellt.
+
+Das Schema führt deshalb zwei Felder: `originalName` (so wie im Text gesagt) und
+`name` (die möglicherweise korrigierte Fassung). Was tatsächlich geändert wurde,
+steht in der Antwort unter `corrections`; verworfene Korrekturvorschläge landen
+intern in `rejectedCorrections`.
+
+Ist die Lebensmittelliste in Mealie leer, passiert schlicht nichts — dann bleibt
+jeder Name unverändert. Prüfen lässt sich das mit:
+
+```bash
+curl -s -H "Authorization: Bearer <token>" \
+  "https://mealie.example.com/api/foods?perPage=-1" | jq '.items | length'
+```
+
+Bei sehr vielen Lebensmitteln wächst der System-Prompt entsprechend — die Liste
+wird ungekürzt übergeben, damit nicht stillschweigend Einträge fehlen.
 
 ## Instanz-Setup
 
