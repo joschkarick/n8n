@@ -77,6 +77,14 @@ Kategoriename taucht in der Antwort unter `unmatchedCategories` auf. Der
 `Code`-Node matcht zusätzlich nur gegen real existierende Label-IDs, ein
 halluzinierter Kategoriename kann also nichts kaputt machen.
 
+## Instanz-Setup
+
+Reverse Proxy, öffentliche Basis-URL und MCP-Server sind in
+[docs/selfhosted-n8n-mcp.md](../docs/selfhosted-n8n-mcp.md) beschrieben. Relevant
+hier vor allem, weil die Webhook-URL für den Shortcut von `N8N_EDITOR_BASE_URL` /
+`N8N_WEBHOOK_URL` abhängt — ist die falsch gesetzt, zeigt n8n eine URL mit
+`:5678` an, die hinter dem Proxy nicht funktioniert.
+
 ## Mealie-Versionen
 
 Die Pfade gelten für **Mealie v2+**. Unter **v1** heißt der Namespace
