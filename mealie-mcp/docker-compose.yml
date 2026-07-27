@@ -1,0 +1,27 @@
+services:
+  mealie-mcp:
+    build:
+      context: .
+      args:
+        # Auf einen Tag oder Commit festnageln, sobald das Setup steht.
+        MEALIE_MCP_REF: main
+    container_name: mealie-mcp
+    restart: unless-stopped
+    env_file: .env
+    # Kein ports-Mapping: Erreichbar nur ueber das Proxy-Netz, nie direkt
+    # aus dem Internet. TLS macht NPMplus.
+    networks:
+      - proxy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+networks:
+  proxy:
+    # Das Netz, in dem auch NPMplus haengt. Namen ggf. anpassen:
+    #   docker network ls
+    external: true
+    name: npmplus
