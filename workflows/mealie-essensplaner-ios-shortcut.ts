@@ -190,6 +190,28 @@ if (!target) {
 
 if (!target) problems.push('Kein Tag erkannt');
 
+// --- Natuerliche Tagesangabe fuer die gesprochene Antwort ---
+// heute / morgen / uebermorgen, sonst Wochentag, ab naechster Woche mit Zusatz.
+let dayPhrase = '';
+if (target) {
+  const deltaDays = Math.round(target.diff(today, 'days').days);
+  const weekDiff = Math.round(target.startOf('week').diff(today.startOf('week'), 'weeks').weeks);
+  const weekdayName = WEEKDAY_DE[target.weekday];
+  if (deltaDays === 0) {
+    dayPhrase = 'heute';
+  } else if (deltaDays === 1) {
+    dayPhrase = 'morgen';
+  } else if (deltaDays === 2) {
+    dayPhrase = 'übermorgen';
+  } else if (weekDiff <= 0) {
+    dayPhrase = weekdayName;
+  } else if (weekDiff === 1) {
+    dayPhrase = weekdayName + ' nächste Woche';
+  } else {
+    dayPhrase = weekdayName + ', den ' + target.toFormat('dd.MM.');
+  }
+}
+
 // --- Rezept bestimmen ---
 const byNorm = new Map();
 for (const r of recipes) {
@@ -249,6 +271,7 @@ const ok = Boolean(recipe && target);
 const dateIso = target ? target.toFormat('yyyy-MM-dd') : '';
 const dayLabel = target ? WEEKDAY_DE[target.weekday] + ', ' + target.toFormat('dd.MM.yyyy') : '';
 
+// Nuechterner Fallback, falls der Formulierungs-Node nichts liefert.
 let message;
 if (ok) {
   message = recipe.name + ' ist für ' + dayLabel + ' zum ' + TYPE_DE[entryType] + ' eingeplant.';
@@ -272,6 +295,7 @@ return [
       recipe: recipe ? { id: recipe.id, name: recipe.name, slug: recipe.slug } : null,
       date: dateIso,
       dayLabel,
+      dayPhrase,
       entryType,
       entryTypeDe: TYPE_DE[entryType],
       recipeCount: recipes.length,
@@ -293,12 +317,70 @@ return [
       recipe: { id: '5f3b2c1a-0000-4a2b-9c3d-1e2f3a4b5c6d', name: 'Lasagne', slug: 'lasagne' },
       date: '2026-07-30',
       dayLabel: 'Donnerstag, 30.07.2026',
+      dayPhrase: 'Donnerstag',
       entryType: 'dinner',
       entryTypeDe: 'Abendessen',
       recipeCount: 128,
       payload: { date: '2026-07-30', entryType: 'dinner', title: '', text: '', recipeId: '5f3b2c1a-0000-4a2b-9c3d-1e2f3a4b5c6d' },
     },
   ],
+});
+
+const haikuModel = languageModel({
+  type: '@n8n/n8n-nodes-langchain.lmChatAnthropic',
+  version: 1.5,
+  config: {
+    name: 'Haiku Modell',
+    parameters: {
+      model: { __rl: true, mode: 'list', value: 'claude-haiku-4-5-20251001', cachedResultName: 'Claude Haiku 4.5' },
+      options: { temperature: 0.4, maxTokensToSample: 200 },
+    },
+    credentials: { anthropicApi: { id: 'GFkAkW87a3runrnv', name: 'Anthropic account' } },
+    position: [220, 560],
+  },
+});
+
+const composeAnswer = node({
+  type: '@n8n/n8n-nodes-langchain.chainLlm',
+  version: 1.9,
+  config: {
+    name: 'Antworttext formulieren',
+    parameters: {
+      promptType: 'define',
+      text: expr(
+        'Erfolg: {{ $json.ok }}\n' +
+        'Rezept: {{ $json.recipe ? $json.recipe.name : $json.requested }}\n' +
+        'Tag: {{ $json.dayPhrase }}\n' +
+        "Vorschlaege: {{ $json.suggestions.join(' oder ') }}\n" +
+        "Probleme: {{ $json.problems.join(' und ') }}"
+      ),
+      messages: {
+        messageValues: [
+          {
+            type: 'SystemMessagePromptTemplate',
+            message:
+              'Du formulierst eine kurze gesprochene Rückmeldung für Siri auf Deutsch. Sie wird vorgelesen, klinge also natürlich und nicht wie ein Protokoll.\n\n' +
+              'Wenn Erfolg true ist:\n' +
+              'Bestätige in genau einem kurzen Satz, dass das Rezept eingeplant ist. Übernimm die Angabe hinter Tag wortwörtlich und verändere sie nicht, auch nicht die Reihenfolge. Wähle ist oder sind passend zum Rezeptnamen: ein Plural wie Wraps oder Pfannkuchen bekommt sind, alles andere ist. Nenne die Mahlzeit nicht.\n' +
+              'Beispiele:\n' +
+              'Lasagne ist für morgen eingeplant.\n' +
+              'Müsli ist für Donnerstag eingeplant.\n' +
+              'Auflauf ist für Montag nächste Woche eingeplant.\n' +
+              'Wraps sind für Dienstag, den 28.06. eingeplant.\n\n' +
+              'Wenn Erfolg false ist:\n' +
+              'Stelle in höchstens zwei kurzen Sätzen eine Rückfrage. Stehen Vorschläge bereit, frage, welches Rezept gemeint war, und nenne die Vorschläge. Ist kein Tag erkannt worden, frage nach dem Tag.\n' +
+              'Beispiele:\n' +
+              'Ich habe kein Rezept namens Auflauf gefunden. Meintest du Kartoffelauflauf oder Nudelauflauf?\n' +
+              'Für wann soll ich die Lasagne einplanen?\n\n' +
+              'Gib ausschliesslich den fertigen Satz aus, ohne Anführungszeichen, ohne Emoji, ohne Aufzählung und ohne Erklärung.',
+          },
+        ],
+      },
+    },
+    subnodes: { model: haikuModel },
+    position: [280, 300],
+  },
+  output: [{ text: 'Wraps sind für morgen eingeplant.' }],
 });
 
 const isResolved = ifElse({
@@ -309,13 +391,16 @@ const isResolved = ifElse({
       conditions: {
         options: { caseSensitive: true, leftValue: '', typeValidation: 'loose' },
         conditions: [
-          { leftValue: expr('{{ $json.ok }}'), operator: { type: 'boolean', operation: 'true', singleValue: true } },
+          {
+            leftValue: expr("{{ $('Rezept & Datum aufloesen').first().json.ok }}"),
+            operator: { type: 'boolean', operation: 'true', singleValue: true },
+          },
         ],
         combinator: 'and',
       },
       options: {},
     },
-    position: [280, 300],
+    position: [520, 300],
   },
 });
 
@@ -332,11 +417,11 @@ const createMealPlanEntry = node({
       sendBody: true,
       contentType: 'json',
       specifyBody: 'json',
-      jsonBody: expr('{{ JSON.stringify($json.payload) }}'),
+      jsonBody: expr("{{ JSON.stringify($('Rezept & Datum aufloesen').first().json.payload) }}"),
       options: {},
     },
     credentials: { httpBearerAuth: { id: 'ViMrCHhrvZvE71PG', name: 'Bearer Auth account' } },
-    position: [520, 180],
+    position: [760, 180],
   },
   output: [{ id: 42, date: '2026-07-30', entryType: 'dinner', title: '', text: '', recipeId: '5f3b2c1a-0000-4a2b-9c3d-1e2f3a4b5c6d' }],
 });
@@ -348,10 +433,10 @@ const respondSuccess = node({
     name: 'Antwort an iOS',
     parameters: {
       respondWith: 'json',
-      responseBody: expr("{{ JSON.stringify({ ok: true, message: $('Rezept & Datum aufloesen').first().json.message, recipe: $('Rezept & Datum aufloesen').first().json.recipe.name, date: $('Rezept & Datum aufloesen').first().json.date, day: $('Rezept & Datum aufloesen').first().json.dayLabel, meal: $('Rezept & Datum aufloesen').first().json.entryTypeDe, matchType: $('Rezept & Datum aufloesen').first().json.matchType, entryId: $json.id }) }}"),
+      responseBody: expr("{{ JSON.stringify({ ok: true, message: ($('Antworttext formulieren').first().json.text || $('Rezept & Datum aufloesen').first().json.message), recipe: $('Rezept & Datum aufloesen').first().json.recipe.name, date: $('Rezept & Datum aufloesen').first().json.date, day: $('Rezept & Datum aufloesen').first().json.dayLabel, dayPhrase: $('Rezept & Datum aufloesen').first().json.dayPhrase, meal: $('Rezept & Datum aufloesen').first().json.entryTypeDe, matchType: $('Rezept & Datum aufloesen').first().json.matchType, entryId: $json.id }) }}"),
       options: {},
     },
-    position: [740, 180],
+    position: [980, 180],
     executeOnce: true,
   },
   output: [{ ok: true, message: 'Lasagne ist für Donnerstag, 30.07.2026 zum Abendessen eingeplant.' }],
@@ -364,10 +449,10 @@ const respondUnresolved = node({
     name: 'Rueckfrage an iOS',
     parameters: {
       respondWith: 'json',
-      responseBody: expr('{{ JSON.stringify({ ok: false, message: $json.message, requested: $json.requested, suggestions: $json.suggestions, problems: $json.problems }) }}'),
+      responseBody: expr("{{ JSON.stringify({ ok: false, message: ($('Antworttext formulieren').first().json.text || $('Rezept & Datum aufloesen').first().json.message), requested: $('Rezept & Datum aufloesen').first().json.requested, suggestions: $('Rezept & Datum aufloesen').first().json.suggestions, problems: $('Rezept & Datum aufloesen').first().json.problems }) }}"),
       options: {},
     },
-    position: [520, 440],
+    position: [760, 440],
     executeOnce: true,
   },
   output: [{ ok: false, message: 'Kein Rezept für "Lasagnee" in Mealie gefunden.' }],
@@ -406,11 +491,13 @@ const matchingNote = sticky(
 
 const responseNote = sticky(
   '## Antwort an den Shortcut\n\n' +
+    '**message** ist der von Claude Haiku formulierte Satz – direkt für Siri zum Vorlesen gedacht.\n\n' +
     'Beide Wege antworten mit HTTP 200 und einem Feld **ok**, damit der Shortcut nicht in einen Fehler läuft.\n\n' +
-    '- ok = true: message vorlesen lassen\n' +
-    '- ok = false: message enthält die Rückfrage, suggestions die passenden Rezeptnamen',
+    '- ok = true: Bestätigung, z. B. *Wraps sind für Dienstag, den 28.06. eingeplant.*\n' +
+    '- ok = false: Rückfrage, dazu suggestions mit den passenden Rezeptnamen\n\n' +
+    'Liefert der Formulierungs-Node nichts, greift der nüchterne Satz aus dem Code-Node.',
   [createMealPlanEntry, respondSuccess, respondUnresolved],
-  { color: 6, width: 460, height: 240 }
+  { color: 6, width: 480, height: 300 }
 );
 
 export default workflow('mealie-essensplaner', 'Mealie Essensplaner (iOS Shortcut)')
@@ -419,6 +506,7 @@ export default workflow('mealie-essensplaner', 'Mealie Essensplaner (iOS Shortcu
   .to(fetchRecipes)
   .to(extractWish)
   .to(resolveEntry)
+  .to(composeAnswer)
   .to(
     isResolved
       .onTrue(createMealPlanEntry.to(respondSuccess))

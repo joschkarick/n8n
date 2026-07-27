@@ -8,6 +8,23 @@ Quellcode der n8n-Workflows auf `https://n8n.joschka.eu`, geschrieben mit dem
 | Datei | Workflow in n8n | Zweck |
 | --- | --- | --- |
 | [`workflows/mealie-essensplaner-ios-shortcut.ts`](workflows/mealie-essensplaner-ios-shortcut.ts) | Mealie Essensplaner (iOS Shortcut) | Plant per Zuruf ein vorhandenes Mealie-Rezept auf einen Tag im Essensplaner ein |
+| – | Mealie Einkaufsliste (iOS Freitext) | Schreibt diktierte Artikel in eine Mealie-Einkaufsliste |
+
+> Der Einkaufslisten-Workflow existiert bisher nur in n8n und ist hier nicht als
+> Quellcode hinterlegt; unten ist lediglich seine Sprachantwort dokumentiert.
+
+## Gesprochene Antworten
+
+Beide Workflows liefern im Feld `message` einen fertigen Satz, den ein iOS
+Shortcut direkt vorlesen lassen kann. Formuliert wird er von **Claude Haiku 4.5**
+(Node *Antworttext formulieren* bzw. *Bestätigung formulieren*).
+
+Die Aufteilung ist bewusst: Alle Fakten – Datum, Rezeptzuordnung, Anzahl – entstehen
+deterministisch im Code-Node. Das Modell bekommt sie fertig geliefert und macht nur
+noch die Sprache, also Satzbau sowie Einzahl und Mehrzahl. Es rechnet keine Daten aus
+und wählt keine Rezepte.
+
+Fällt die Formulierung aus, greift ein nüchterner Fallback-Satz aus dem Code-Node.
 
 ---
 
@@ -49,10 +66,11 @@ Erfolg:
 ```json
 {
   "ok": true,
-  "message": "Lasagne ist für Donnerstag, 30.07.2026 zum Abendessen eingeplant.",
-  "recipe": "Lasagne",
-  "date": "2026-07-30",
-  "day": "Donnerstag, 30.07.2026",
+  "message": "Wraps sind für morgen eingeplant.",
+  "recipe": "Wraps",
+  "date": "2026-07-28",
+  "day": "Dienstag, 28.07.2026",
+  "dayPhrase": "morgen",
   "meal": "Abendessen",
   "matchType": "exakt",
   "entryId": 42
@@ -64,12 +82,25 @@ Rückfrage:
 ```json
 {
   "ok": false,
-  "message": "Kein eindeutiges Rezept für \"Auflauf\" gefunden. Meintest du: Kartoffelauflauf, Nudelauflauf?",
+  "message": "Ich habe kein Rezept namens Auflauf gefunden. Meintest du Kartoffelauflauf oder Nudelauflauf?",
   "requested": "Auflauf",
   "suggestions": ["Kartoffelauflauf", "Nudelauflauf"],
   "problems": ["Kein Tag erkannt", "Kein passendes Rezept gefunden"]
 }
 ```
+
+### Tagesangabe im Satz
+
+`dayPhrase` entsteht im Code-Node und wird vom Modell wortwörtlich übernommen:
+
+| Abstand | Formulierung |
+| --- | --- |
+| heute / morgen / übermorgen | `heute`, `morgen`, `übermorgen` |
+| noch diese Woche | `Donnerstag` |
+| nächste Woche | `Montag nächste Woche` |
+| weiter weg | `Samstag, den 15.08.` |
+
+Getestet: *„Wraps sind für morgen eingeplant."*, *„Lasagne ist für Samstag, den 15.08. eingeplant."*
 
 ### iOS Shortcut
 
@@ -106,3 +137,28 @@ neuen erfinden. Der Code-Node matcht anschliessend selbst gegen die echte Liste:
 3. Wortähnlichkeit – nur wenn der beste Treffer eindeutig besser ist als der zweitbeste
 
 Bleibt es mehrdeutig, wird **kein** Eintrag angelegt; stattdessen kommen Vorschläge zurück.
+
+---
+
+## Mealie Einkaufsliste (iOS Freitext)
+
+Nur die Sprachantwort ist hier dokumentiert, der Workflow selbst liegt in n8n.
+
+Nach dem Schreiben der Artikel formuliert *Bestätigung formulieren* (Claude Haiku 4.5)
+einen Satz mit **ausschliesslich der Anzahl** – nie mit einzelnen Artikeln:
+
+```json
+{
+  "ok": true,
+  "message": "Drei Artikel stehen auf der Einkaufsliste.",
+  "list": "Montagseinkauf",
+  "added": 3,
+  "categorized": 3,
+  "unmatchedCategories": [],
+  "corrections": [{ "from": "Zwiebeln", "to": "Zwiebel" }],
+  "items": ["Milch", "g Mehl", "Zwiebel"]
+}
+```
+
+Die Detailfelder bleiben unverändert erhalten, falls der Shortcut mehr auswerten soll.
+Für Siri reicht `message`.
