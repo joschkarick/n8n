@@ -3,6 +3,9 @@
 Macht [rldiao/mealie-mcp-server](https://github.com/rldiao/mealie-mcp-server)
 für Claude im Web und auf dem iPhone erreichbar.
 
+> **Zum Einrichten: [ANLEITUNG.md](ANLEITUNG.md)** – Schritt für Schritt mit den
+> konkreten Hostnamen. Dieses Dokument erklärt, *warum* es so gebaut ist.
+
 ## Warum überhaupt ein Vorbau
 
 Der Mealie-MCP-Server startet fest per stdio:
@@ -56,7 +59,7 @@ Dazu eine Application mit dem Slug `mealie-mcp` und diesem Provider.
 Notiere aus dem Provider:
 
 - **Client ID** und **Client Secret** → kommen später in Claude
-- den **Issuer**, Form `https://authentik.joschka.eu/application/o/mealie-mcp/`
+- den **Issuer**, Form `https://login.joschka.eu/application/o/mealie-mcp/`
 
 ## 2. Dienst starten
 
@@ -69,8 +72,8 @@ docker compose logs -f mealie-mcp
 ```
 
 Im Log müssen Ressource, Metadata, Issuer und Audience so stehen, wie du sie
-erwartest. Prüfe das Netz in `docker-compose.yml` — es muss das sein, in dem
-auch NPMplus hängt (`docker network ls`).
+erwartest. Der Dienst bindet sich auf `127.0.0.1:8000`; läuft NPMplus in einem
+eigenen Docker-Netz, siehe die Kommentare in `docker-compose.yml`.
 
 ## 3. NPMplus
 
@@ -80,7 +83,7 @@ Proxy Host anlegen:
 | --- | --- |
 | Domain | `mealie-mcp.joschka.eu` |
 | Scheme | `http` |
-| Forward Hostname | `mealie-mcp` |
+| Forward Hostname | `127.0.0.1` |
 | Forward Port | `8000` |
 | Websockets Support | an |
 | Block Common Exploits | an |

@@ -13,6 +13,12 @@ Quellcode der n8n-Workflows auf `https://n8n.joschka.eu`, geschrieben mit dem
 > Der Einkaufslisten-Workflow existiert bisher nur in n8n und ist hier nicht als
 > Quellcode hinterlegt; unten ist lediglich seine Sprachantwort dokumentiert.
 
+## Weitere Komponenten
+
+| Verzeichnis | Zweck |
+| --- | --- |
+| [`mealie-mcp/`](mealie-mcp/) | Macht den Mealie-MCP-Server für Claude im Web und auf dem iPhone erreichbar – HTTP-Vorbau plus OAuth gegen Authentik. Einrichtung: [ANLEITUNG.md](mealie-mcp/ANLEITUNG.md) |
+
 ## Gesprochene Antworten
 
 Beide Workflows liefern im Feld `message` einen fertigen Satz, den ein iOS
