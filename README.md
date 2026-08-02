@@ -9,6 +9,7 @@ Quellcode der n8n-Workflows auf `https://n8n.joschka.eu`, geschrieben mit dem
 | --- | --- | --- |
 | [`workflows/mealie-essensplaner-ios-shortcut.ts`](workflows/mealie-essensplaner-ios-shortcut.ts) | Mealie Essensplaner (iOS Shortcut) | Plant per Zuruf ein vorhandenes Mealie-Rezept auf einen Tag im Essensplaner ein |
 | – | Mealie Einkaufsliste (iOS Freitext) | Schreibt diktierte Artikel in eine Mealie-Einkaufsliste |
+| [`workflows/bibliothek-verlaengerung.ts`](workflows/bibliothek-verlaengerung.ts) | Bibliothek Braunschweig – Verlängerung | Verlängert fällige Ausleihen im webOPAC automatisch und meldet das Ergebnis per ntfy |
 
 > Der Einkaufslisten-Workflow existiert bisher nur in n8n und ist hier nicht als
 > Quellcode hinterlegt; unten ist lediglich seine Sprachantwort dokumentiert.
@@ -21,7 +22,7 @@ Quellcode der n8n-Workflows auf `https://n8n.joschka.eu`, geschrieben mit dem
 
 ## Gesprochene Antworten
 
-Beide Workflows liefern im Feld `message` einen fertigen Satz, den ein iOS
+Beide Mealie-Workflows liefern im Feld `message` einen fertigen Satz, den ein iOS
 Shortcut direkt vorlesen lassen kann. Formuliert wird er von **Claude Haiku 4.5**
 (Node *Antworttext formulieren* bzw. *Bestätigung formulieren*).
 
@@ -168,3 +169,103 @@ einen Satz mit **ausschliesslich der Anzahl** – nie mit einzelnen Artikeln:
 
 Die Detailfelder bleiben unverändert erhalten, falls der Shortcut mehr auswerten soll.
 Für Siri reicht `message`.
+
+---
+
+## Bibliothek Braunschweig – Verlängerung
+
+Prüft jeden Morgen das Konto im webOPAC der Stadtbibliothek Braunschweig,
+verlängert alle fälligen Medien und schickt eine ntfy-Push aufs Handy.
+
+Workflow in n8n: [`leF0zcLXUbC7GiGJ`](https://n8n.joschka.eu/workflow/leF0zcLXUbC7GiGJ)
+
+### Ablauf
+
+1. **Täglich prüfen** – Schedule Trigger, 08:00 Europe/Berlin
+2. **Konfiguration** – `opacUrl`, `timezone`, `warnDays`, `ntfyServer`, `ntfyTopic`
+3. **Sitzung starten** – `GET /start.do`, liefert `JSESSIONID` und `CSId`
+4. **Sitzungsdaten** – Cookies und `CSId` aus dem HTML ziehen
+5. **Anmelden** – `POST /login.do` mit `methodToCall=submit`, `CSId`, `username`, `password`
+6. **Anmeldung prüfen** – Erfolg feststellen, Cookies fortschreiben
+7. **Hinweisseite?** – falls der OPAC eine Zwischenseite zeigt: `login.do?methodToCall=done`
+8. **Ausleihen holen** – `GET /userAccount.do?methodToCall=showAccount&typ=1`
+9. **Ausleihen auswerten** – Tabelle parsen: Titel, Leihfristende, verlängerbar
+10. **Verlängern nötig?** – nur wenn ein Medium in ≤ `warnDays` Tagen fällig ist
+    - ja → **Alles verlängern** (`methodToCall=renewalPossible&renewal=account`)
+      → **Ausleihen erneut holen** → **Verlängerung auswerten**
+    - nein → direkt weiter, ohne Benachrichtigung
+11. **Meldung bauen** → **Benachrichtigen?** → **Push senden** (ntfy)
+12. **Abmelden** – `login.do?methodToCall=logout`
+
+### Warum kein Browser
+
+Der webOPAC ist OCLC **SISIS-SunRise** – ein klassisches Struts-Backend mit
+`.do`-Endpunkten. Login und Verlängerung sind einfache Formular-Requests ohne
+CAPTCHA und ohne JavaScript-Zwang. Playwright wäre unnötiger Ballast; der Flow
+kommt mit HTTP-Request-Nodes aus und ist dadurch schnell und wartungsarm.
+
+Das Protokoll ist gegengeprüft am Open-Source-Adapter der
+[Web Opac App](https://github.com/opacapp/opacclient) (`SISIS.java`), der
+dieselbe Software spricht.
+
+### Zugangsdaten
+
+Benutzernummer und Passwort stehen **nicht** im Workflow, sondern im Credential
+**„OPAC Braunschweig"** vom Typ *Custom Auth*:
+
+```json
+{ "body": { "username": "DEINE-BENUTZERNUMMER", "password": "DEIN-PASSWORT" } }
+```
+
+n8n hängt diese Felder an den Formular-Body des Login-Requests an. Das Passwort
+ist beim OPAC standardmäßig das Geburtsdatum im Format `TTMMJJ`.
+
+### Wann verlängert wird
+
+`warnDays` (Standard: 3) steuert, ab wann verlängert wird. Geprüft wird täglich,
+gedrückt wird erst, wenn ein Medium innerhalb der nächsten drei Tage fällig ist.
+Das verhindert, dass Leihtage verschenkt werden, falls die Bibliothek die neue
+Frist ab dem Verlängerungstag statt ab dem alten Fristende rechnet.
+
+### Benachrichtigung
+
+Push über [ntfy](https://ntfy.sh). Im Node *Konfiguration* muss `ntfyTopic` auf
+ein eigenes, schwer zu erratendes Topic gesetzt werden – wer das Topic kennt,
+kann mitlesen. Danach dasselbe Topic in der ntfy-App abonnieren.
+
+Es wird nur gemeldet, wenn es etwas zu sagen gibt:
+
+| Lage | Titel | Priorität |
+| --- | --- | --- |
+| Verlängert | `3 Medien verlängert` | 3 |
+| Teilweise verlängert | `Teilweise verlängert` | 5 |
+| Nichts verlängerbar | `Verlängerung nicht möglich` | 5 |
+| Anmeldung scheitert | `Bibliothek: Anmeldung fehlgeschlagen` | 5 |
+| Kontoseite unlesbar | `Bibliothek: Konto nicht lesbar` | 4 |
+| Nichts fällig | – (keine Push) | – |
+
+Beispiel:
+
+```
+Teilweise verlängert
+
+Neue Leihfrist: 30.08.2026
+• Der Schwarm → 30.08.2026
+• Die Känguru-Chroniken → 30.08.2026
+
+Nicht verlängert — bitte zurückbringen:
+• Sapiens (bis 05.08.2026) — vorgemerkt
+```
+
+Auf Pushover umstellen: im Node *Push senden* die URL auf
+`https://api.pushover.net/1/messages.json` ändern und im Node *Meldung bauen*
+`payload` auf `{ token, user, title, message, priority }` anpassen.
+
+### Ob verlängert wurde, wird nachgeprüft
+
+Der Flow verlässt sich nicht auf die Statusmeldungen der Verlängerungsseite –
+deren Formulierungen unterscheiden sich je nach Installation. Stattdessen lädt
+er die Kontoseite danach erneut und vergleicht die Leihfristen vorher/nachher.
+Ein Titel gilt als verlängert, wenn sein Fristende sich geändert hat. Die
+Statustexte der Verlängerungsseite werden nur als Begründung ergänzt
+(z. B. *„vorgemerkt"*).
