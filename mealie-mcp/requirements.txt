@@ -1,7 +1,10 @@
-# Ausdruecklich mitgefuehrt: Der Mealie-MCP-Server braucht mcp.server.fastmcp,
-# das es erst ab 1.2 gibt. Ohne diese Zeile haengt die Version allein an der
-# Aufloesung des Server-Pakets - und eine zu alte bricht erst zur Laufzeit.
-mcp[cli]>=1.12
+# Die Obergrenze ist der eigentliche Punkt: mcp 2.0.0 hat mcp.server.fastmcp
+# entfernt, genau das Submodul, das der Mealie-MCP-Server importiert. Der
+# Server selbst fordert nur mcp[cli]>=1.12.0 ohne Grenze nach oben und zieht
+# damit inzwischen eine Version, mit der er nicht mehr startet.
+# Erst anheben, wenn der Server auf das eigenstaendige fastmcp-Paket umgestellt
+# ist - das ist eine andere Bibliothek, kein blosser Umbenennung.
+mcp[cli]>=1.12,<2
 
 uvicorn[standard]>=0.30
 httpx>=0.27
