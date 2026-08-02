@@ -286,6 +286,17 @@ docker compose run --rm --entrypoint sh mealie-mcp \
   `docker-compose.yml` auf die LAN-IP des Hosts, oder `MEALIE_BASE_URL` direkt
   auf den Mealie-Container zeigen lassen. Beides ist dort kommentiert.
 
+**`No module named 'mcp.server.fastmcp'`** — im Image liegt eine zu alte Version
+des `mcp`-Pakets. Der Build prüft das inzwischen selbst; bei einem alten Image
+hilft ein sauberer Neubau:
+
+```bash
+docker compose build --no-cache && docker compose up -d
+```
+
+Nicht verwechseln: Das eigenständige Paket **`fastmcp`** ist etwas anderes als
+`mcp.server.fastmcp` aus dem offiziellen SDK. Es nachzuinstallieren hilft nicht.
+
 **„nicht importierbar"** — das Modul heisst anders, weil das Upstream-Repo
 umgebaut wurde. Nachsehen, was tatsächlich installiert wurde:
 
