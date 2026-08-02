@@ -263,6 +263,25 @@ abschalten, indem du die Variable leer lässt. **Nicht so lassen.**
 Meist fehlt der **Signing Key** am Provider. Ohne ihn ist der Access Token kein
 signiertes JWT.
 
+### „Das FastMCP-Objekt wurde nicht gefunden"
+
+Das Log listet jetzt pro Kandidat den Grund. Zwei Fälle sind zu unterscheiden:
+
+**„Fehler beim Laden des Moduls"** — der Pfad stimmt, aber das Modul bricht beim
+Laden ab. Praktisch immer Mealie: `MEALIE_BASE_URL` oder `MEALIE_API_KEY` falsch,
+oder der Container erreicht Mealie nicht. `server.py` baut die Verbindung schon
+beim Import auf.
+
+**„nicht importierbar"** — das Modul heisst anders, weil das Upstream-Repo
+umgebaut wurde. Nachsehen, was tatsächlich installiert wurde:
+
+```bash
+docker compose run --rm --entrypoint sh mealie-mcp -c "pip show -f mealie-mcp-server"
+```
+
+Den gefundenen Modulnamen dann in der `.env` als `MCP_MODULE` setzen — dafür
+muss `gateway.py` nicht angefasst werden.
+
 ### `421 Invalid Host header`
 
 NPMplus reicht einen anderen Host durch als den aus `PUBLIC_URL`. Das Log zeigt
