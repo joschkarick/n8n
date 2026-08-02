@@ -8,6 +8,15 @@ services:
     container_name: mealie-mcp
     restart: unless-stopped
     env_file: .env
+    # Haeufige Falle beim Selbsthosten: Der Container loest mealie.joschka.eu
+    # oeffentlich auf und laeuft ueber den eigenen Router zurueck. Viele
+    # Setups koennen dieses Hairpin-NAT nicht, die Verbindung haengt dann.
+    # Abhilfe - eine der beiden Zeilen aktivieren:
+    #   a) auf die LAN-IP des Hosts zeigen
+    # extra_hosts:
+    #   - "mealie.joschka.eu:192.168.1.10"
+    #   b) oder MEALIE_BASE_URL in der .env direkt auf den Mealie-Container
+    #      setzen und beide ins selbe Docker-Netz haengen
     # Nur an localhost gebunden. Damit kommt NPMplus im Host-Netz heran,
     # aus dem Internet aber niemand direkt - TLS und Auth laufen ueber den
     # Proxy bzw. das Gateway selbst. Niemals auf 0.0.0.0 aufmachen.

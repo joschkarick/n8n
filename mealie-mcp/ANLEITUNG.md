@@ -272,6 +272,20 @@ Laden ab. Praktisch immer Mealie: `MEALIE_BASE_URL` oder `MEALIE_API_KEY` falsch
 oder der Container erreicht Mealie nicht. `server.py` baut die Verbindung schon
 beim Import auf.
 
+Erreichbarkeit direkt aus dem Container prüfen:
+
+```bash
+docker compose run --rm --entrypoint sh mealie-mcp \
+  -c 'curl -sS -o /dev/null -w "%{http_code}\n" https://mealie.joschka.eu/api/app/about'
+```
+
+- **401** ist gut — die Verbindung steht, nur der Token fehlt beim nackten curl.
+- **000 oder ein Hänger** heisst: keine Verbindung. Beim Selbsthosten fast immer
+  Hairpin-NAT — der Container löst den öffentlichen Namen auf und läuft über den
+  eigenen Router zurück, was viele Setups nicht können. Abhilfe: `extra_hosts` in
+  `docker-compose.yml` auf die LAN-IP des Hosts, oder `MEALIE_BASE_URL` direkt
+  auf den Mealie-Container zeigen lassen. Beides ist dort kommentiert.
+
 **„nicht importierbar"** — das Modul heisst anders, weil das Upstream-Repo
 umgebaut wurde. Nachsehen, was tatsächlich installiert wurde:
 
