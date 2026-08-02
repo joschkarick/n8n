@@ -244,6 +244,16 @@ class TokenVerifier:
             log.info("JWKS-Endpunkt: %s", jwks_uri)
             return self._jwk_client
 
+    def issuer_for_metadata(self) -> str:
+        """Der Issuer, wie Authentik sich selbst nennt.
+
+        Muss zeichengenau stimmen: Clients pruefen nach RFC 8414, ob der
+        Issuer im Discovery-Dokument dem entspricht, was sie angefragt
+        haben. Ein Slash Unterschied reicht zum Scheitern.
+        """
+        self._discover()
+        return self._token_issuer
+
     def verify(self, token: str) -> dict:
         jwk_client = self._discover()
         try:
@@ -271,10 +281,19 @@ verifier = TokenVerifier(OIDC_ISSUER, OIDC_AUDIENCE)
 
 async def protected_resource_metadata(request: Request) -> Response:
     """RFC 9728. Hierueber findet Claude den zustaendigen Authorization Server."""
+    issuer = OIDC_ISSUER.rstrip("/")
+    try:
+        issuer = await run_in_threadpool(verifier.issuer_for_metadata)
+    except Exception as exc:
+        log.warning(
+            "Issuer konnte nicht bei Authentik erfragt werden (%s). "
+            "Es wird der konfigurierte Wert gemeldet.",
+            exc,
+        )
     return JSONResponse(
         {
             "resource": RESOURCE_URL,
-            "authorization_servers": [OIDC_ISSUER.rstrip("/")],
+            "authorization_servers": [issuer],
             "scopes_supported": ["openid", "profile", "email"],
             "bearer_methods_supported": ["header"],
         }
