@@ -286,16 +286,22 @@ docker compose run --rm --entrypoint sh mealie-mcp \
   `docker-compose.yml` auf die LAN-IP des Hosts, oder `MEALIE_BASE_URL` direkt
   auf den Mealie-Container zeigen lassen. Beides ist dort kommentiert.
 
-**`No module named 'mcp.server.fastmcp'`** — im Image liegt eine zu alte Version
-des `mcp`-Pakets. Der Build prüft das inzwischen selbst; bei einem alten Image
-hilft ein sauberer Neubau:
+**`No module named 'mcp.server.fastmcp'`** — im Image liegt **mcp 2.x**. Dort
+wurde das Submodul entfernt, das der Mealie-MCP-Server importiert. Der Server
+fordert `mcp[cli]>=1.12.0` ohne Obergrenze und zieht damit inzwischen eine
+Version, mit der er nicht mehr startet.
+
+Deshalb steht in `requirements.txt` `mcp[cli]>=1.12,<2`, und der Build prüft den
+Import. Bei einem alten Image hilft ein sauberer Neubau:
 
 ```bash
 docker compose build --no-cache && docker compose up -d
 ```
 
-Nicht verwechseln: Das eigenständige Paket **`fastmcp`** ist etwas anderes als
-`mcp.server.fastmcp` aus dem offiziellen SDK. Es nachzuinstallieren hilft nicht.
+Nicht verwechseln: Das eigenständige Paket **`fastmcp`** ist eine andere
+Bibliothek, keine blosse Umbenennung von `mcp.server.fastmcp`. Es
+nachzuinstallieren hilft nicht. Die Obergrenze darf erst fallen, wenn der
+Upstream-Server auf `fastmcp` umgestellt ist.
 
 **„nicht importierbar"** — das Modul heisst anders, weil das Upstream-Repo
 umgebaut wurde. Nachsehen, was tatsächlich installiert wurde:
