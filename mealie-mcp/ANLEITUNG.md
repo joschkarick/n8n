@@ -123,8 +123,13 @@ OIDC_ISSUER=https://login.joschka.eu/application/o/mealie-mcp/
 OIDC_AUDIENCE=deine-client-id-aus-schritt-1
 ```
 
-Der Dienst bindet sich auf `127.0.0.1:8000` — erreichbar für NPMplus im
-Host-Netz, aber nicht aus dem Internet.
+Der Dienst bindet sich auf `127.0.0.1:18000` — erreichbar für NPMplus im
+Host-Netz, aber nicht aus dem Internet. Ist der Port belegt, in der `.env`
+`HOST_PORT` ändern; im Container bleibt es immer 8000.
+
+```bash
+ss -tlnp | grep :18000     # muss leer sein
+```
 
 Läuft dein NPMplus stattdessen in einem eigenen Docker-Netz, dann in
 `docker-compose.yml` das `ports`-Mapping streichen und den `networks`-Block
@@ -159,7 +164,7 @@ Verbindung schon beim Import auf. Prüfe Token und Erreichbarkeit.
 | --- | --- |
 | Scheme | `http` |
 | Forward Hostname | `127.0.0.1` (bei NPMplus im eigenen Docker-Netz: `mealie-mcp`) |
-| Forward Port | `8000` |
+| Forward Port | `18000` (bzw. dein `HOST_PORT`) |
 | Websockets Support | an |
 | Block Common Exploits | an |
 | SSL | Let's Encrypt, Force SSL, HTTP/2 |
@@ -186,7 +191,16 @@ du Authentik ohnehin hast, aber es ist genau falsch.
 
 ## Schritt 5 — Vor Claude gegenprüfen
 
-Drei Aufrufe, die alle stimmen müssen:
+Zuerst direkt auf dem Server, noch ohne Proxy:
+
+```bash
+curl -s http://127.0.0.1:18000/healthz
+```
+
+Kommt hier `{"status":"ok",...}`, läuft der Container richtig und es fehlt nur
+noch NPMplus davor.
+
+Dann von aussen — drei Aufrufe, die alle stimmen müssen:
 
 ```bash
 # 1. muss 200 liefern
