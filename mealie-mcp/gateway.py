@@ -17,6 +17,7 @@ Der Mealie-API-Token bleibt hier im Container und erreicht Claude nie.
 
 from __future__ import annotations
 
+import importlib
 import logging
 import os
 import sys
@@ -88,22 +89,67 @@ _CANDIDATES = (
     ("mealie_mcp_server", "mcp"),
 )
 
-mcp = None
-for module_name, attr in _CANDIDATES:
-    try:
-        module = __import__(module_name, fromlist=[attr])
-        mcp = getattr(module, attr)
-        log.info("MCP-Server geladen aus %s.%s", module_name, attr)
-        break
-    except (ImportError, AttributeError):
-        continue
+def _find_mcp():
+    """Sucht das FastMCP-Objekt und meldet bei Misserfolg den echten Grund.
 
-if mcp is None:
+    Wichtig: Jeder Kandidat kann aus ganz unterschiedlichen Gruenden
+    scheitern - Modul nicht vorhanden, fehlende Umgebungsvariablen, Mealie
+    nicht erreichbar. Die Fehler werden einzeln gesammelt statt verschluckt,
+    sonst steht man vor einem "nicht gefunden" ohne jeden Anhaltspunkt.
+    """
+    candidates = list(_CANDIDATES)
+
+    # Notausgang ohne Codeaenderung: MCP_MODULE und optional MCP_ATTR setzen.
+    override = os.environ.get("MCP_MODULE", "").strip()
+    if override:
+        candidates.insert(0, (override, os.environ.get("MCP_ATTR", "mcp").strip() or "mcp"))
+
+    problems = []
+    for module_name, attr in candidates:
+        try:
+            module = importlib.import_module(module_name)
+        except ImportError as exc:
+            problems.append(f"  {module_name}: nicht importierbar ({exc})")
+            continue
+        except Exception as exc:
+            # Der Import selbst ist gelaufen, aber das Modul hat beim Laden
+            # abgebrochen. Bei diesem Server passiert das, wenn Mealie nicht
+            # erreichbar ist oder der API-Token fehlt.
+            problems.append(
+                f"  {module_name}: Fehler beim Laden des Moduls - "
+                f"{type(exc).__name__}: {exc}"
+            )
+            continue
+
+        found = getattr(module, attr, None)
+        if found is not None:
+            log.info("MCP-Server geladen aus %s.%s", module_name, attr)
+            return found
+
+        others = [
+            key for key, value in vars(module).items()
+            if type(value).__name__ == 'FastMCP'
+        ]
+        problems.append(
+            f"  {module_name}: kein Attribut '{attr}'. "
+            f"FastMCP-Objekte im Modul: {', '.join(others) if others else 'keine'}"
+        )
+
     sys.exit(
-        "Das FastMCP-Objekt wurde nicht gefunden. Pruefe im Container mit\n"
-        '  python -c "import server; print(server.mcp)"\n'
-        "wie das Modul heisst, und ergaenze es oben in _CANDIDATES."
+        "Das FastMCP-Objekt wurde nicht gefunden.\n\n"
+        "Versuchte Kandidaten:\n"
+        + "\n".join(problems)
+        + "\n\nSteht oben ein Fehler beim Laden des Moduls, ist nicht der Pfad "
+        "das Problem,\nsondern Mealie: MEALIE_BASE_URL und MEALIE_API_KEY "
+        "pruefen.\n\n"
+        "Ist das Modul schlicht nicht vorhanden, zeig dir mit\n"
+        "  docker compose run --rm --entrypoint sh mealie-mcp -c "
+        "'pip show -f mealie-mcp-server'\n"
+        "die installierten Dateien an und setze MCP_MODULE in der .env."
     )
+
+
+mcp = _find_mcp()
 
 
 # --------------------------------------------------------------------------
