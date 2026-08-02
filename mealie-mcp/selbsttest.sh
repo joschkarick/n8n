@@ -92,12 +92,27 @@ echo "4. Authentik erreichbar"
 if [[ -z "$ISSUER" ]]; then
   info "OIDC_ISSUER nicht gesetzt, uebersprungen"
 else
-  disco=$(curl -sS --max-time 10 "$ISSUER/.well-known/openid-configuration" 2>&1)
+  disco=$(curl -sS --max-time 10 -w '\n__CODE__%{http_code}' \
+    "$ISSUER/.well-known/openid-configuration" 2>&1)
+  dcode="${disco##*__CODE__}"
+  disco="${disco%%$'\n'__CODE__*}"
   if [[ "$disco" == *'"jwks_uri"'* ]]; then
-    ok "OpenID-Discovery liefert jwks_uri"
+    ok "OpenID-Discovery liefert jwks_uri (HTTP $dcode)"
   else
-    bad "Discovery nicht erreichbar oder unvollstaendig"
-    info "$disco"
+    bad "Discovery nicht erreichbar oder unvollstaendig (HTTP ${dcode:-keine Antwort})"
+    # Authentik antwortet bei unbekanntem Slug mit einer HTML-Seite. Die
+    # ungekuerzt auszugeben hilft niemandem - die Deutung schon.
+    if [[ "$disco" == *"<!DOCTYPE"* || "$disco" == *"<html"* ]]; then
+      info "Es kam HTML statt JSON zurueck."
+      if [[ "$disco" == *"Not Found"* || "$dcode" == "404" ]]; then
+        info "Authentik kennt diesen Slug nicht. Der Issuer enthaelt den Slug der"
+        info "APPLICATION, nicht den Namen des Providers."
+        info "In Authentik: Applications -> Applications -> Slug ablesen, oder beim"
+        info "Provider die angezeigte OpenID Configuration URL uebernehmen."
+      fi
+    else
+      info "${disco:0:300}"
+    fi
   fi
 fi
 
