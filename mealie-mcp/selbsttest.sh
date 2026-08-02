@@ -38,12 +38,19 @@ echo
 
 # 1 -------------------------------------------------------------------------
 echo "1. Healthcheck"
-body=$(curl -sS --max-time 10 "$BASE/healthz" 2>&1)
+body=$(curl -sS --max-time 10 -w '\n__CODE__%{http_code}' "$BASE/healthz" 2>&1)
+code="${body##*__CODE__}"
+body="${body%%$'\n'__CODE__*}"
 if [[ "$body" == *'"status"'*'"ok"'* ]]; then
-  ok "/healthz antwortet"
+  ok "/healthz antwortet (HTTP $code)"
 else
-  bad "/healthz antwortet nicht wie erwartet"
-  info "$body"
+  bad "/healthz antwortet nicht wie erwartet (HTTP ${code:-keine Antwort})"
+  info "${body:0:300}"
+  case "$code" in
+    502|503) info "Der Proxy erreicht den Container nicht - Forward Hostname und Port pruefen." ;;
+    404)     info "Der Proxy antwortet, leitet aber woanders hin." ;;
+    000|"")  info "Keine Verbindung - DNS, TLS oder es existiert kein Proxy Host fuer diese Domain." ;;
+  esac
 fi
 
 # 2 -------------------------------------------------------------------------
