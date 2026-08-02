@@ -72,7 +72,8 @@ docker compose logs -f mealie-mcp
 ```
 
 Im Log müssen Ressource, Metadata, Issuer und Audience so stehen, wie du sie
-erwartest. Der Dienst bindet sich auf `127.0.0.1:8000`; läuft NPMplus in einem
+erwartest. Der Dienst bindet sich auf `127.0.0.1:18000` (änderbar über
+`HOST_PORT` in der `.env`); läuft NPMplus in einem
 eigenen Docker-Netz, siehe die Kommentare in `docker-compose.yml`.
 
 ## 3. NPMplus
@@ -84,7 +85,7 @@ Proxy Host anlegen:
 | Domain | `mealie-mcp.joschka.eu` |
 | Scheme | `http` |
 | Forward Hostname | `127.0.0.1` |
-| Forward Port | `8000` |
+| Forward Port | `18000` (bzw. `HOST_PORT` aus der `.env`) |
 | Websockets Support | an |
 | Block Common Exploits | an |
 | SSL | Let's Encrypt, Force SSL, HTTP/2 |

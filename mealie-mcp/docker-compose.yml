@@ -11,8 +11,10 @@ services:
     # Nur an localhost gebunden. Damit kommt NPMplus im Host-Netz heran,
     # aus dem Internet aber niemand direkt - TLS und Auth laufen ueber den
     # Proxy bzw. das Gateway selbst. Niemals auf 0.0.0.0 aufmachen.
+    # Host-Port ueber HOST_PORT in der .env aenderbar. Im Container bleibt es
+    # immer 8000 - nur die linke Seite ist frei waehlbar.
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:${HOST_PORT:-18000}:8000"
     # Variante fuer NPMplus in einem eigenen Docker-Netz: ports streichen,
     # stattdessen den networks-Block unten aktivieren und dort denselben
     # Netznamen eintragen, den "docker network ls" zeigt. Dann lautet der
