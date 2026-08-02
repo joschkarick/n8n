@@ -17,6 +17,14 @@ RUN pip install "mealie-mcp-server @ git+https://github.com/rldiao/mealie-mcp-se
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
+# Der MCP-Server importiert mcp.server.fastmcp. Steht im Image eine zu alte
+# Version des mcp-Pakets, faellt das sonst erst beim Start auf - und dort als
+# scheinbares Pfadproblem. Deshalb hier pruefen, solange es noch billig ist.
+RUN python -c "\
+import importlib.metadata as md; \
+from mcp.server.fastmcp import FastMCP; \
+print('mcp', md.version('mcp'), 'ok')"
+
 COPY gateway.py .
 
 RUN useradd --create-home --uid 10001 app && chown -R app /app
