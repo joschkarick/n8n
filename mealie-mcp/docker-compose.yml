@@ -8,10 +8,17 @@ services:
     container_name: mealie-mcp
     restart: unless-stopped
     env_file: .env
-    # Kein ports-Mapping: Erreichbar nur ueber das Proxy-Netz, nie direkt
-    # aus dem Internet. TLS macht NPMplus.
-    networks:
-      - proxy
+    # Nur an localhost gebunden. Damit kommt NPMplus im Host-Netz heran,
+    # aus dem Internet aber niemand direkt - TLS und Auth laufen ueber den
+    # Proxy bzw. das Gateway selbst. Niemals auf 0.0.0.0 aufmachen.
+    ports:
+      - "127.0.0.1:8000:8000"
+    # Variante fuer NPMplus in einem eigenen Docker-Netz: ports streichen,
+    # stattdessen den networks-Block unten aktivieren und dort denselben
+    # Netznamen eintragen, den "docker network ls" zeigt. Dann lautet der
+    # Forward Hostname in NPMplus "mealie-mcp" statt "127.0.0.1".
+    # networks:
+    #   - proxy
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/healthz"]
       interval: 30s
@@ -19,9 +26,8 @@ services:
       retries: 3
       start_period: 15s
 
-networks:
-  proxy:
-    # Das Netz, in dem auch NPMplus haengt. Namen ggf. anpassen:
-    #   docker network ls
-    external: true
-    name: npmplus
+# Nur noetig, wenn NPMplus in einem eigenen Docker-Netz laeuft.
+# networks:
+#   proxy:
+#     external: true
+#     name: hier-den-namen-aus-docker-network-ls

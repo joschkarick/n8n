@@ -123,12 +123,12 @@ OIDC_ISSUER=https://login.joschka.eu/application/o/mealie-mcp/
 OIDC_AUDIENCE=deine-client-id-aus-schritt-1
 ```
 
-Prüfe vorher das Netz in `docker-compose.yml` — es muss das sein, in dem auch
-NPMplus hängt:
+Der Dienst bindet sich auf `127.0.0.1:8000` — erreichbar für NPMplus im
+Host-Netz, aber nicht aus dem Internet.
 
-```bash
-docker network ls
-```
+Läuft dein NPMplus stattdessen in einem eigenen Docker-Netz, dann in
+`docker-compose.yml` das `ports`-Mapping streichen und den `networks`-Block
+aktivieren, mit dem Namen aus `docker network ls`.
 
 Dann:
 
@@ -158,7 +158,7 @@ Verbindung schon beim Import auf. Prüfe Token und Erreichbarkeit.
 | Feld | Wert |
 | --- | --- |
 | Scheme | `http` |
-| Forward Hostname | `mealie-mcp` |
+| Forward Hostname | `127.0.0.1` (bei NPMplus im eigenen Docker-Netz: `mealie-mcp`) |
 | Forward Port | `8000` |
 | Websockets Support | an |
 | Block Common Exploits | an |
