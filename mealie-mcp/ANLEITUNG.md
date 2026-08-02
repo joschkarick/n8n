@@ -123,9 +123,18 @@ OIDC_ISSUER=https://login.joschka.eu/application/o/mealie-mcp/
 OIDC_AUDIENCE=deine-client-id-aus-schritt-1
 ```
 
-Der Dienst bindet sich auf `127.0.0.1:18000` — erreichbar für NPMplus im
-Host-Netz, aber nicht aus dem Internet. Ist der Port belegt, in der `.env`
-`HOST_PORT` ändern; im Container bleibt es immer 8000.
+Zwei Werte in der `.env` entscheiden über die Erreichbarkeit:
+
+| Fall | `BIND_ADDRESS` | NPMplus Forward Hostname |
+| --- | --- | --- |
+| NPMplus auf demselben Host | `127.0.0.1` | `127.0.0.1` |
+| NPMplus woanders im LAN | LAN-IP **dieses** Hosts, z. B. `192.168.2.40` | dieselbe IP |
+
+Das ist die häufigste Stolperfalle: Steht `BIND_ADDRESS` auf `127.0.0.1`,
+während der Proxy auf einer anderen Maschine sitzt, funktioniert lokal alles
+und von aussen nichts.
+
+Ist der Port belegt, `HOST_PORT` ändern; im Container bleibt es immer 8000.
 
 ```bash
 ss -tlnp | grep :18000     # muss leer sein
@@ -163,7 +172,7 @@ Verbindung schon beim Import auf. Prüfe Token und Erreichbarkeit.
 | Feld | Wert |
 | --- | --- |
 | Scheme | `http` |
-| Forward Hostname | `127.0.0.1` (bei NPMplus im eigenen Docker-Netz: `mealie-mcp`) |
+| Forward Hostname | dieselbe Adresse wie `BIND_ADDRESS` — `127.0.0.1` bei NPMplus auf demselben Host, sonst dessen LAN-IP |
 | Forward Port | `18000` (bzw. dein `HOST_PORT`) |
 | Websockets Support | an |
 | Block Common Exploits | an |
@@ -312,6 +321,18 @@ docker compose run --rm --entrypoint sh mealie-mcp -c "pip show -f mealie-mcp-se
 
 Den gefundenen Modulnamen dann in der `.env` als `MCP_MODULE` setzen — dafür
 muss `gateway.py` nicht angefasst werden.
+
+### Lokal alles grün, von aussen nichts
+
+Fast immer `BIND_ADDRESS`. Läuft NPMplus auf einer anderen Maschine, muss der
+Dienst auf der LAN-IP dieses Hosts lauschen, nicht auf `127.0.0.1`. Prüfen:
+
+```bash
+ss -tlnp | grep :18000
+```
+
+Steht dort `127.0.0.1:18000`, kommt nur dieser Host selbst heran. Erwartet wird
+die LAN-IP, etwa `192.168.2.40:18000`.
 
 ### `421 Invalid Host header`
 
