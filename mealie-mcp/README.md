@@ -3,6 +3,9 @@
 Macht [rldiao/mealie-mcp-server](https://github.com/rldiao/mealie-mcp-server)
 für Claude im Web und auf dem iPhone erreichbar.
 
+> **Zum Einrichten: [ANLEITUNG.md](ANLEITUNG.md)** – Schritt für Schritt mit den
+> konkreten Hostnamen. Dieses Dokument erklärt, *warum* es so gebaut ist.
+
 ## Warum überhaupt ein Vorbau
 
 Der Mealie-MCP-Server startet fest per stdio:
@@ -56,7 +59,7 @@ Dazu eine Application mit dem Slug `mealie-mcp` und diesem Provider.
 Notiere aus dem Provider:
 
 - **Client ID** und **Client Secret** → kommen später in Claude
-- den **Issuer**, Form `https://authentik.joschka.eu/application/o/mealie-mcp/`
+- den **Issuer**, Form `https://login.joschka.eu/application/o/mealie-mcp/`
 
 ## 2. Dienst starten
 
