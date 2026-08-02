@@ -89,6 +89,41 @@ _CANDIDATES = (
     ("mealie_mcp_server", "mcp"),
 )
 
+def _sanitize_env():
+    """Bereinigt die Mealie-Variablen, bevor server.py sie liest.
+
+    In .env-Dateien landen Anfuehrungszeichen und angehaengte Kommentare
+    schnell im Wert selbst. Die Datei sieht dann richtig aus, httpx bekommt
+    aber eine unbrauchbare URL - und der Fehler taucht weit entfernt als
+    gescheiterter Import auf.
+    """
+    for name in ("MEALIE_BASE_URL", "MEALIE_API_KEY"):
+        raw = os.environ.get(name)
+        if raw is None:
+            continue
+        cleaned = raw.strip()
+        if len(cleaned) >= 2 and cleaned[0] == cleaned[-1] and cleaned[0] in "\"'":
+            cleaned = cleaned[1:-1].strip()
+        if cleaned != raw:
+            log.warning(
+                "%s enthielt Anfuehrungszeichen oder Leerzeichen und wurde bereinigt. "
+                "Bitte die .env korrigieren - Werte dort ohne Anfuehrungszeichen schreiben.",
+                name,
+            )
+            os.environ[name] = cleaned
+
+    base = os.environ.get("MEALIE_BASE_URL", "")
+    if base.endswith("/"):
+        os.environ["MEALIE_BASE_URL"] = base.rstrip("/")
+    log.info("Mealie: %s", os.environ.get("MEALIE_BASE_URL") or "(nicht gesetzt)")
+    log.info(
+        "Mealie-Token: %s",
+        "gesetzt, %d Zeichen" % len(os.environ.get("MEALIE_API_KEY", ""))
+        if os.environ.get("MEALIE_API_KEY")
+        else "FEHLT",
+    )
+
+
 def _find_mcp():
     """Sucht das FastMCP-Objekt und meldet bei Misserfolg den echten Grund.
 
@@ -149,6 +184,7 @@ def _find_mcp():
     )
 
 
+_sanitize_env()
 mcp = _find_mcp()
 
 
