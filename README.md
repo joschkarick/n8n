@@ -232,14 +232,19 @@ Frist ab dem Verlängerungstag statt ab dem alten Fristende rechnet.
 Push über die eigene ntfy-Instanz `https://ntfy.joschka.eu`, Topic `bibliothek`.
 In der ntfy-App dasselbe Topic auf dieser Instanz abonnieren.
 
-Ein Credential braucht der Push-Node nicht: Die Instanz erlaubt anonymes
-Publish. Geprüft aus n8n heraus – `/v1/health` meldet `healthy`, `/v1/account`
-liefert Rolle `anonymous`, ein Test-Publish wird mit HTTP 200 quittiert.
+Die Instanz läuft mit `auth-default-access: deny-all`. Der Node *Push senden*
+meldet sich deshalb als ntfy-User `n8n` mit einem Token an – Credential
+**„ntfy joschka.eu"** vom Typ *Bearer Auth*, Inhalt ist das Token `tk_…`.
+ntfy akzeptiert es als `Authorization: Bearer tk_…`.
 
-Umgekehrt heißt das: Wer die Instanz-URL kennt, kann auf jedes Topic schreiben
-und mitlesen. Wer das dichtmachen will, setzt in der ntfy-Konfiguration
-`auth-default-access: deny-all`, legt einen Token an und hinterlegt ihn im Node
-*Push senden* als Bearer-Credential.
+Der ntfy-User braucht außerdem Schreibrecht auf das Topic:
+
+```
+ntfy access n8n bibliothek write
+```
+
+Fehlt die ACL, antwortet ntfy trotz gültigem Token mit **403** – das ist der
+übliche Stolperstein nach der Umstellung auf `deny-all`.
 
 Es wird nur gemeldet, wenn es etwas zu sagen gibt:
 

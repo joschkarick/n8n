@@ -570,12 +570,17 @@ const sendPush = node({
     parameters: {
       method: 'POST',
       url: expr('{{ $("Konfiguration").first().json.ntfyServer }}'),
+      // ntfy läuft mit auth-default-access: deny-all, der User "n8n"
+      // authentifiziert sich per Token: Authorization: Bearer tk_...
+      authentication: 'genericCredentialType',
+      genericAuthType: 'httpBearerAuth',
       sendBody: true,
       contentType: 'json',
       specifyBody: 'json',
       jsonBody: expr('{{ JSON.stringify($json.payload) }}'),
       options: { timeout: 30000 },
     },
+    credentials: { httpBearerAuth: newCredential('ntfy joschka.eu') },
     position: [1960, -100],
   },
 });
