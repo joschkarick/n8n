@@ -229,9 +229,17 @@ Frist ab dem Verlängerungstag statt ab dem alten Fristende rechnet.
 
 ### Benachrichtigung
 
-Push über [ntfy](https://ntfy.sh). Im Node *Konfiguration* muss `ntfyTopic` auf
-ein eigenes, schwer zu erratendes Topic gesetzt werden – wer das Topic kennt,
-kann mitlesen. Danach dasselbe Topic in der ntfy-App abonnieren.
+Push über die eigene ntfy-Instanz `https://ntfy.joschka.eu`, Topic `bibliothek`.
+In der ntfy-App dasselbe Topic auf dieser Instanz abonnieren.
+
+Ein Credential braucht der Push-Node nicht: Die Instanz erlaubt anonymes
+Publish. Geprüft aus n8n heraus – `/v1/health` meldet `healthy`, `/v1/account`
+liefert Rolle `anonymous`, ein Test-Publish wird mit HTTP 200 quittiert.
+
+Umgekehrt heißt das: Wer die Instanz-URL kennt, kann auf jedes Topic schreiben
+und mitlesen. Wer das dichtmachen will, setzt in der ntfy-Konfiguration
+`auth-default-access: deny-all`, legt einen Token an und hinterlegt ihn im Node
+*Push senden* als Bearer-Credential.
 
 Es wird nur gemeldet, wenn es etwas zu sagen gibt:
 
