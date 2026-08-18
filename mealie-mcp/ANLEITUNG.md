@@ -62,9 +62,19 @@ Admin-Oberfläche → **Applications → Providers → Create → OAuth2/OpenID 
 | Client type | **Confidential** |
 | Redirect URIs | `https://claude.ai/api/mcp/auth_callback` |
 | Signing Key | ein Zertifikat auswählen, z. B. *authentik Self-signed Certificate* |
-| Scopes | `openid`, `profile`, `email` |
+| Scopes | `openid`, `profile`, `email`, **`offline_access`** |
 
 Zwei Felder entscheiden über Erfolg oder Misserfolg:
+
+**`offline_access` entscheidet über die Haltbarkeit.** Ohne diese Scope-Zuordnung
+stellt Authentik **keinen Refresh Token** aus. Claude kann die Verbindung dann
+nicht still erneuern und du musst sie regelmässig von Hand neu verbinden. Unter
+*Advanced protocol settings* dazu passend die Laufzeiten setzen:
+
+| Einstellung | Empfehlung |
+| --- | --- |
+| Access Token validity | `hours=24` |
+| Refresh Token validity | `days=90` |
 
 **Signing Key ist Pflicht.** Ohne ihn stellt Authentik kein signiertes JWT aus,
 und das Gateway kann nichts gegen die JWKS prüfen. Wenn du später „invalid_token"
@@ -321,6 +331,25 @@ docker compose run --rm --entrypoint sh mealie-mcp -c "pip show -f mealie-mcp-se
 
 Den gefundenen Modulnamen dann in der `.env` als `MCP_MODULE` setzen — dafür
 muss `gateway.py` nicht angefasst werden.
+
+### Verbindung muss in Claude regelmässig neu hergestellt werden
+
+Es wird kein Refresh Token ausgestellt, Claude kann also nicht still erneuern.
+Drei Stellen prüfen:
+
+1. Beim Provider unter *Advanced protocol settings* muss die Scope-Zuordnung
+   **`offline_access`** ausgewählt sein.
+2. Access und Refresh Token validity hochsetzen — die Vorgaben sind für
+   interaktive Logins gedacht und für eine Dauerverbindung zu knapp.
+3. `scopes_supported` in der Metadata muss `offline_access` enthalten:
+
+```bash
+curl -s https://mealie-mcp.joschka.eu/.well-known/oauth-protected-resource
+```
+
+Danach den Connector in Claude **einmal trennen und neu verbinden**. Ein
+bestehender Zugang wird nicht nachträglich um einen Refresh Token ergänzt — der
+entsteht nur beim Autorisieren.
 
 ### Lokal alles grün, von aussen nichts
 

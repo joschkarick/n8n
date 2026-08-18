@@ -71,6 +71,15 @@ OIDC_AUDIENCE = os.environ.get("OIDC_AUDIENCE", "").strip() or None
 # Pfad, unter dem der MCP-Endpunkt liegt. Vorgabe von FastMCP ist /mcp.
 MCP_PATH = os.environ.get("MCP_PATH", "/mcp")
 
+# Scopes, die in der Metadata angeboten werden. offline_access ist der
+# entscheidende: Ohne ihn stellt Authentik keinen Refresh Token aus, und die
+# Verbindung muss nach Ablauf des Access Tokens von Hand erneuert werden.
+OIDC_SCOPES = [
+    s for s in os.environ.get(
+        "OIDC_SCOPES", "openid profile email offline_access"
+    ).replace(",", " ").split() if s
+]
+
 RESOURCE_URL = f"{PUBLIC_URL}{MCP_PATH}"
 METADATA_PATH = "/.well-known/oauth-protected-resource"
 METADATA_URL = f"{PUBLIC_URL}{METADATA_PATH}"
@@ -294,7 +303,7 @@ async def protected_resource_metadata(request: Request) -> Response:
         {
             "resource": RESOURCE_URL,
             "authorization_servers": [issuer],
-            "scopes_supported": ["openid", "profile", "email"],
+            "scopes_supported": OIDC_SCOPES,
             "bearer_methods_supported": ["header"],
         }
     )
